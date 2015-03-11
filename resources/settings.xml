@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <category label="32019">
+        <setting label="32017" type="labelenum" id="quality" values="SD|720p|1080p" default="720p"/>
+        <setting label="32036" type="bool" id="caching" default="false"/>
+        <setting label="32029" type="folder" id="save_path" default="/tmp"/>
+        <setting label="32035" type="number" id="delay" default="5"/>
+        <setting label="32037" type="number" id="port" default="8282"/>
+    </category>
+</settings>
