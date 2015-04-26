@@ -1,6 +1,6 @@
 import os
 import threading
-import time
+import datetime
 # server module
 from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 
@@ -13,25 +13,16 @@ import YDStreamExtractor
 import YoutubeDLWrapper
 from YoutubeDLWrapper import youtube_dl
 
- 
+
 __addon__       = xbmcaddon.Addon(id='plugin.service.youtube-dl-rcv')
 __addonname__   = __addon__.getAddonInfo('name')
 __icon__        = __addon__.getAddonInfo('icon')
 
-
-
-# called by each thread
-def blocking_dl(downloader, name, info):
-    result = downloader.download(name, info)
-    return result
-
-def build_name(info,path,template='%(title)s-%(id)s.%(ext)s'):
+def build_name(info,path="",template='%(title)s-%(id)s.%(ext)s'):
     """
     Download the selected video in vidinfo to path.
     Template sets the youtube-dl format which defaults to TITLE-ID.EXT.
     """
-    ytdl = YoutubeDLWrapper._getYTDL()
-    
     # build name
     info = YDStreamExtractor._convertInfo(info) #Get the right format
     try:
@@ -39,79 +30,47 @@ def build_name(info,path,template='%(title)s-%(id)s.%(ext)s'):
     except TypeError:
         print 'STRANGE ERROR FROM YOUTUBE DL CONTROL WHEN TRYING TO COMPLETE VIDEO INFO'
     path_template = os.path.join(path,template)
+    ytdl = YoutubeDLWrapper._getYTDL()
     ytdl.params['quiet'] = True
     ytdl.params['outtmpl'] = path_template    
     name = ytdl.prepare_filename(info)
+    name = name.encode('utf8')
     return name
-    
-
-def launch_download(info, ytdl):
-    fd = youtube_dl.downloader.get_suitable_downloader(info)(ytdl, ytdl.params)
-
-    t = threading.Thread(target=blocking_dl, args = (fd, name, info))
-    t.start()
-
-    xbmc.executebuiltin('Notification(%s, %s, %d, %s)'%("Downloading", name, 5000, __icon__))
 
 def play(url):
-    print '########################################################################################################'
+    '''play media in given page url'''
+    # get parameters
+    quality = __addon__.getSetting('quality')
+    qualities = {'SD': 0, '720p': 1, '1080p': 2} 
+    quality = qualities[quality]
+
+    # build media representation from url
     info = YDStreamExtractor.getVideoInfo(url,quality=quality)
     if info is None:
         return False
     
-    print 'INFO', info
-    name = build_name(info, save_path)
-    print 'NAME',name
-    print 'CACHE',make_cache
-
-
-    # Should we cache ?
-    if make_cache:
-        # check if already downloaded
-        if os.path.exists(name):
-            xbmc.executebuiltin('Notification(%s, %s, %d, %s)'%("Local", ":)", 1000, __icon__))
-            no_dl = True
-        else:
-            no_dl = False
-            launch_download(info, ytdl)
-            name = name + '.part'
-    else:
-        no_dl = True
-        name = info.streamURL()
-
-    if not no_dl:
-        # wait to buffer
-        time.sleep(delay)
-
-    # check if dowload finished
-    short_name = name[:-5]
-    if not os.path.exists(name) and os.path.exists(short_name):
-        print "DL ALREADY FINISHED"
-        # get rid of extension
-        name = short_name
-    print 'OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO'
+    name = build_name(info)
+    stream_url = info.streamURL()
 
     web_player = xbmc.Player()
-    if make_cache:
-        if os.path.exists(name):
-            # insist on playing
-            for i in range(10):
-                if web_player.isPlaying():
-                    played = web_player.getPlayingFile()
-                else:
-                    played = None
-                print played, name
-                if played != name:
-                    print 'LAUNCHING LOCAL VIDEO'
-                    web_player.play(name)
-                time.sleep(2)
-    else:
-        print 'LAUNCHING DISTANT VIDEO'
-        web_player.play(name)
+    print 'LAUNCHING DISTANT VIDEO', name
+    web_player.play(stream_url)
+    
+    #keep trace of watching activty
+    write_log(name, url)
+    
     return True
 
-class MyHandler(BaseHTTPRequestHandler):
+def write_log(name, url):
+    '''add watched video info in lof file'''
+    log_path = __addon__.getSetting('logfile')
+    if log_path != "":
+        with open(log_path,'a') as log:
+            time = str(datetime.datetime.now())
+            log.write(time+'\t'+name+'\t'+url+'\n')
 
+class MyHandler(BaseHTTPRequestHandler):
+    '''simple server to get watching requests'''
     def do_GET(self):
         # if receiving watch instruction
         if self.path.startswith('/watch?url='):
@@ -123,7 +82,7 @@ class MyHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write("""<html>
             <head>
-            <title>Success</title>
+            <title>""" + url + """</title>
             </head>
             <body>
             Trying to play """ + url + """ ...</body>
@@ -131,33 +90,15 @@ class MyHandler(BaseHTTPRequestHandler):
             
             # try and dl media at url
             play(url)
-            return
-                
         else:
             self.send_error(404,'File Not Found: %s' % self.path)
-
-
-caching = __addon__.getSetting('caching')
-if caching == 'true':
-    make_cache = True
-else:
-    make_cache = False
 
 # Interface listenning for web playing events
 host = ''
 port = int(__addon__.getSetting('port'))
-
-quality = __addon__.getSetting('quality')
-qualities = {'SD': 0, '720p': 1, '1080p': 2} 
-quality = qualities[quality]
-
-delay = float(__addon__.getSetting('delay'))
-
-save_path = __addon__.getSetting('save_path')
-
 # Start the server
 server = HTTPServer((host, port), MyHandler)
-print "Starting http server for web media requests."
+print "Starting http server for web media requests on port " + str(port)
 server.serve_forever()
 
 #~ url = "http://www.youtube.com/watch?v=_yVv9dx88x0"

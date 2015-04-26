@@ -160,3 +160,7 @@ msgstr ""
 msgctxt "#32037"
 msgid "Interface port"
 msgstr ""
+
+msgctxt "#32038"
+msgid "Watching Activity Logfile"
+msgstr ""
