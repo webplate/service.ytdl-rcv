@@ -13,6 +13,9 @@ import YDStreamExtractor
 import YoutubeDLWrapper
 from YoutubeDLWrapper import youtube_dl
 
+#pulsar for torrent streaming
+#import pulsar
+
 
 __addon__       = xbmcaddon.Addon(id='plugin.service.youtube-dl-rcv')
 __addonname__   = __addon__.getAddonInfo('name')
@@ -104,3 +107,4 @@ server.serve_forever()
 #~ url = "http://www.youtube.com/watch?v=_yVv9dx88x0"
 #~ url = "http://www.dailymotion.com/video/x29ejto_master-of-the-universe-replay_shortfilms"
 #~ url = "http://www.dailymotion.com/video/x2j23bs_watermelon-in-30-seconds-or-less_lifestyle"
+#~ url = "https://www.youtube.com/watch?v=bJmOUBlgjqA"
