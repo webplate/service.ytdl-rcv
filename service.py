@@ -124,7 +124,7 @@ else:
             name, url, stream_url, t = QUEUE.get()
             # accept only last request
             if t > last_request:
-                last_request = t + 3.
+                last_request = t
                 # send media url to kodi player
                 web_player.play(stream_url)
                 # keep trace of watching activty
