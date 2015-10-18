@@ -11,8 +11,8 @@ Keep it updated
     sudo pip install --upgrade youtube_dl
 
 Install this addon :
-    - dowload as ZIP
-    - use KODI install addon from zip functionnality
+- dowload as ZIP
+- use KODI install addon from zip functionnality
 
 Customize and save the bookmarklet:
 
