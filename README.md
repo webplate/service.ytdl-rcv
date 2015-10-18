@@ -2,6 +2,14 @@
 
 à la Chromecast but with plenty more sites !
 
-Just customize and save the bookmarklet:
+Install youtube_dl
+
+    sudo pip install youtube_dl
+
+Keep it updated
+
+    sudo pip install --upgrade youtube_dl
+
+And just customize and save the bookmarklet:
     
     javascript:(function(){window.open("http://KODI_SERVER_IP:8282/watch?url="+document.URL);})();

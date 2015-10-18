@@ -1,6 +1,0 @@
-get name first to check if dl necessary
-
-check part file size to restart dl if previously unfinished
-(? keep active dls in list)
-
-check continued watch when .part removal
