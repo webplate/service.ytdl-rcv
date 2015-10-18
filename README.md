@@ -10,6 +10,12 @@ Keep it updated
 
     sudo pip install --upgrade youtube_dl
 
-And just customize and save the bookmarklet:
-    
-    javascript:(function(){window.open("http://KODI_SERVER_IP:8282/watch?url="+document.URL);})();
+Install this addon :
+    - dowload as ZIP
+    - use KODI install addon from zip functionnality
+
+Customize and save the bookmarklet:
+
+    javascript:(function(){location.href='http://KODI_IP:8282/watch?url='+location.href;})();
+
+Then just click on it to trigger a web media request to KODI.
