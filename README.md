@@ -1,12 +1,12 @@
-# Kodi addon to cast web content to Kodi.
+# Kodi addon to cast web content to the media center.
 
-à la Chromecast but with plenty more sites !
+à la Chromecast but supporting plenty more sites !
 
-Install youtube_dl
+Install youtube_dl on the KODI machine:
 
     sudo pip install youtube_dl
 
-Keep it updated
+Keep it updated:
 
     sudo pip install --upgrade youtube_dl
 
@@ -14,8 +14,8 @@ Install this addon :
 - dowload as ZIP
 - use KODI install addon from zip functionnality
 
-Customize and save the bookmarklet:
+Customize and save the bookmarklet on the clients:
 
     javascript:(function(){location.href='http://KODI_IP:8282/watch?url='+location.href;})();
 
-Then just click on it to trigger a web media request to KODI.
+Then, when visiting a web page with a media, just click on the bookmarklet to trigger a request to KODI.
