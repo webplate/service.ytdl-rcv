@@ -33,6 +33,9 @@ class extractor(threading.Thread):
         threading.Thread.__init__(self)
 
     def run(self):
+        # reload ytdl module as it may have been updated by cron
+        youtube_dl = reload(youtube_dl)
+        
         ydl_opts = {
             'ignoreerrors': True,
             'noplaylist': True
