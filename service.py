@@ -33,9 +33,6 @@ class extractor(threading.Thread):
         threading.Thread.__init__(self)
 
     def run(self):
-        # reload ytdl module as it may have been updated by cron
-        youtube_dl = reload(youtube_dl)
-        
         ydl_opts = {
             'ignoreerrors': True,
             'noplaylist': True
@@ -120,6 +117,7 @@ else:
     httpd = server(QUEUE)
     httpd.start()
     # main loop
+    flip = time.time()
     last_request = 0
     while True:
         # watch for requests and launch player
@@ -132,6 +130,11 @@ else:
                 web_player.play(stream_url)
                 # keep trace of watching activty
                 write_log(name, url)
+        # reload ytdl module as it may have been updated by cron
+        period = 15*60
+        if time.time() > flip + period:
+            flip = time.time()
+            youtube_dl = reload(youtube_dl)
         # sleep to preserve cpu
         time.sleep(0.5)
-
+        
