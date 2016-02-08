@@ -1,3 +1,6 @@
+0.0.3
+playlist support
+
 0.0.2
 native youtube_dl and multithreading
 
