@@ -64,15 +64,19 @@ class extractor(threading.Thread):
                                 break
 
                         if info != None:
-                            stream_url = info['url']
-                            name = info['title']+'-'+info['id']
-                            if launched:
-                                self.q.put(('add', name, self.url, stream_url, self.t))
+                            try:
+                                stream_url = info['url']
+                            except KeyError:
+                                xbmc.log("playlist item ignored as no url found")
                             else:
-                                self.q.put(('play', name, self.url, stream_url, self.t))
-                                launched = True
-                                if not is_playlist:
-                                    finished = True
+                                name = info['title']+'-'+info['id']
+                                if launched:
+                                    self.q.put(('add', name, self.url, stream_url, self.t))
+                                else:
+                                    self.q.put(('play', name, self.url, stream_url, self.t))
+                                    launched = True
+                                    if not is_playlist:
+                                        finished = True
             i += 1
 
 class handler(BaseHTTPRequestHandler):
@@ -165,9 +169,9 @@ else:
                 if t > last_request:
                     last_request = t
                     # clear playlists
-                    clear_playlists()
+                    clear_playlists('video')
                     # send media url to kodi player
-                    #add entry to Kodi playlist
+                    # add entry to Kodi playlist
                     listitem = xbmcgui.ListItem()
                     listitem.setLabel(name)
                     video_playlist.add(stream_url, listitem)
