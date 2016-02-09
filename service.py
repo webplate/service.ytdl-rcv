@@ -8,6 +8,7 @@ import time
 import datetime
 import threading
 import Queue
+import unicodedata
 from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 
 # kodi module
@@ -22,6 +23,27 @@ __addon__       = xbmcaddon.Addon()
 __addonname__   = __addon__.getAddonInfo('name')
 __icon__        = __addon__.getAddonInfo('icon')
 
+class MyLogger(object):
+    def fmt(self, message):
+        message = '[%s] %s' % (__addonname__, message)
+        # Remove non ascii characters (xbmc.log doesn't support them)
+        message = unicodedata.normalize('NFKD', message)
+        message = message.encode('ascii', 'ignore')
+        return message
+    
+    def debug(self, msg):
+        xbmc.log(self.fmt(msg), xbmc.LOGNOTICE)
+
+    def warning(self, msg):
+        xbmc.log(self.fmt(msg), xbmc.LOGNOTICE)
+
+    def error(self, msg):
+        xbmc.log(self.fmt(msg), xbmc.LOGERROR)
+
+def log(message):
+    """add message to kodi log"""
+    MyLogger().warning(message)
+
 class extractor(threading.Thread):
     """deamon extracting information from a media page url
     and putting it in a queue"""
@@ -30,15 +52,17 @@ class extractor(threading.Thread):
         self.url = url
         self.q = q
         self.t = time.time()
+        self.monitor = xbmc.Monitor() # monitor xbmc status (exiting)
         threading.Thread.__init__(self)
 
     def run(self):
-        is_playlist = False # are we dealing with a single media or a playlist page
-        launched = False # is a media launched ?
-        i = 1
-        while i < 200:
+        is_playlist = False # are we dealing with a single media or a playlist page ?
+        launched = False # is a media yet launched by this thread ?
+        i = 1 # playlist item index
+        while not self.monitor.abortRequested() and i < 200:
             ydl_opts = {
                 'ignoreerrors': True,
+                'logger': MyLogger(),
                 'playliststart': i,
                 'playlistend': i #get only next item
                 }
@@ -46,30 +70,28 @@ class extractor(threading.Thread):
                 try:
                     info = ydl.extract_info(self.url, download=False)
                 except youtube_dl.utils.DownloadError:
-                    xbmc.log('Youtube_dl error while streaming from '+self.url)
+                    log('Youtube_dl error while streaming from '+self.url)
+                    info = None
+            if info != None and '_type' in info and info['_type'] == 'playlist':
+                is_playlist = True
+                if len(info['entries']) > 0:
+                    info = info['entries'][0]
                 else:
-                    if info != None and '_type' in info and info['_type'] == 'playlist':
-                        is_playlist = True
-                        if len(info['entries']) > 0:
-                            info = info['entries'][0]
-                        else:
-                            xbmc.log('End of playlist reached')
-                            break
-                    if info != None:
-                        try:
-                            stream_url = info['url']
-                        except KeyError:
-                            xbmc.log('Item ignored as no url found. It may be a playlist in the playlist')
-                        else:
-                            name = info['title']+' - '+info['id']
-                            if launched:
-                                self.q.put(('add', name, self.url, stream_url, self.t))
-                            else:
-                                self.q.put(('play', name, self.url, stream_url, self.t))
-                                launched = True
-                                if not is_playlist:
-                                    break
+                    log('End of playlist reached')
+                    break
+            if info != None and 'url' in info:
+                stream_url = info['url']
+                name = info['title']+' - '+info['id']
+                if not launched:
+                    self.q.put(('play', name, self.url, stream_url, self.t))
+                    if not is_playlist:
+                        break
+                    launched = True
+                else:
+                    self.q.put(('add', name, self.url, stream_url, self.t))
             i += 1
+        else:
+            log('Extraction aborted before end')
 
 class handler(BaseHTTPRequestHandler):
     '''simple handler reacting to requests'''
@@ -100,46 +122,51 @@ class handler(BaseHTTPRequestHandler):
 
 class server(threading.Thread):
     """deamon http server for new media requests"""
-    
-    def run(self):
+    def __init__(self):
         # Interface listenning for web playing events
-        host = ''
-        port = int(__addon__.getSetting('port'))
-        # Start the server
-        server = HTTPServer((host, port), handler)
-        xbmc.log( "Starting http server for web media requests on port " + str(port))
-        server.serve_forever()
+        self.host = ''
+        self.port = int(__addon__.getSetting('port'))
+        self.server = HTTPServer((self.host, self.port), handler)
+        threading.Thread.__init__(self)
+        
+    def run(self):
+        log( "Starting http server for web media requests on port " + str(self.port))
+        self.server.serve_forever()
+
+    def stop(self):
+        log('Shutting down http server')
+        self.server.shutdown()
 
 def write_log(name, url):
     '''add watched video info in log file'''
-    
     log_path = __addon__.getSetting('logfile')
     if log_path != "":
         with io.open(log_path,'a', encoding='utf-8') as log:
             time = str(datetime.datetime.now())
             log.write(time+'\t'+name+'\t'+url+'\n')
 
-    
+
 try:
     # native youtube dl
     import youtube_dl
 except ImportError:
-    xbmc.log( "Missing youtube_dl in python path (sudo pip install youtube_dl)")
+    log( "Missing youtube_dl in python path (sudo pip install youtube_dl)")
 else:
-    # the player to control
+    # monitor xbmc status (exiting)
+    monitor = xbmc.Monitor()
+    # the player and playlist to control
     web_player = xbmc.Player()
     video_playlist = xbmc.PlayList(xbmc.PLAYLIST_VIDEO)
-    #~ audio_playlist = xbmc.PlayList(xbmc.PLAYLIST_MUSIC)
     # global queue for multithreading
     QUEUE = Queue.Queue()
     # http server to watch for requests
-    httpd = server(QUEUE)
+    httpd = server()
     httpd.start()
     # main loop
     flip = time.time()
     period = 15*60  #every 15 minutes
     last_request = 0
-    while True:
+    while not monitor.abortRequested():
         # watch for requests and launch player
         if not QUEUE.empty():
             entry = QUEUE.get()
@@ -174,4 +201,7 @@ else:
             youtube_dl = reload(youtube_dl)
         # sleep to preserve cpu
         time.sleep(0.5)
+    else:
+        httpd.stop()
+        log('Stopping service')
         
