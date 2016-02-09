@@ -33,11 +33,10 @@ class extractor(threading.Thread):
         threading.Thread.__init__(self)
 
     def run(self):
-        is_playlist = False #are we dealing with a single media or a playlist page
+        is_playlist = False # are we dealing with a single media or a playlist page
         launched = False # is a media launched ?
-        finished = False
         i = 1
-        while not finished:
+        while i < 200:
             ydl_opts = {
                 'ignoreerrors': True,
                 'playliststart': i,
@@ -47,36 +46,29 @@ class extractor(threading.Thread):
                 try:
                     info = ydl.extract_info(self.url, download=False)
                 except youtube_dl.utils.DownloadError:
-                    xbmc.log('Error while streaming from '+self.url)
+                    xbmc.log('Youtube_dl error while streaming from '+self.url)
                 else:
+                    if info != None and '_type' in info and info['_type'] == 'playlist':
+                        is_playlist = True
+                        if len(info['entries']) > 0:
+                            info = info['entries'][0]
+                        else:
+                            xbmc.log('End of playlist reached')
+                            break
                     if info != None:
                         try:
                             stream_url = info['url']
                         except KeyError:
-                            if info['_type'] == 'playlist':
-                                is_playlist = True
-
-                        if is_playlist:
-                            if len(info['entries']) > 0 :
-                                info = info['entries'][0]
+                            xbmc.log('Item ignored as no url found. It may be a playlist in the playlist')
+                        else:
+                            name = info['title']+' - '+info['id']
+                            if launched:
+                                self.q.put(('add', name, self.url, stream_url, self.t))
                             else:
-                                finished = True
-                                break
-
-                        if info != None:
-                            try:
-                                stream_url = info['url']
-                            except KeyError:
-                                xbmc.log("playlist item ignored as no url found")
-                            else:
-                                name = info['title']+'-'+info['id']
-                                if launched:
-                                    self.q.put(('add', name, self.url, stream_url, self.t))
-                                else:
-                                    self.q.put(('play', name, self.url, stream_url, self.t))
-                                    launched = True
-                                    if not is_playlist:
-                                        finished = True
+                                self.q.put(('play', name, self.url, stream_url, self.t))
+                                launched = True
+                                if not is_playlist:
+                                    break
             i += 1
 
 class handler(BaseHTTPRequestHandler):
@@ -127,18 +119,6 @@ def write_log(name, url):
             time = str(datetime.datetime.now())
             log.write(time+'\t'+name+'\t'+url+'\n')
 
-def clear_playlists( mode="both" ):
-    # clear playlists
-    if mode in ( "video", "both" ):
-        vplaylist = xbmc.PlayList( xbmc.PLAYLIST_VIDEO )
-        vplaylist.clear()
-        xbmc.log( "Video Playlist Cleared", xbmc.LOGNOTICE )
-    if mode in ( "music", "both" ):
-        mplaylist = xbmc.PlayList(xbmc.PLAYLIST_MUSIC)
-        mplaylist.clear()
-        xbmc.log( "Music Playlist Cleared", xbmc.LOGNOTICE )
-  
-
     
 try:
     # native youtube dl
@@ -157,6 +137,7 @@ else:
     httpd.start()
     # main loop
     flip = time.time()
+    period = 15*60  #every 15 minutes
     last_request = 0
     while True:
         # watch for requests and launch player
@@ -168,13 +149,13 @@ else:
                 # accept only last request
                 if t > last_request:
                     last_request = t
-                    # clear playlists
-                    clear_playlists('video')
-                    # send media url to kodi player
+                    # clear playlist
+                    video_playlist.clear()
                     # add entry to Kodi playlist
                     listitem = xbmcgui.ListItem()
                     listitem.setLabel(name)
                     video_playlist.add(stream_url, listitem)
+                    # lets play
                     web_player.play(video_playlist)
                     # keep trace of watching activty
                     write_log(name, url)
@@ -188,7 +169,6 @@ else:
                     listitem.setLabel(name)
                     video_playlist.add(stream_url, listitem)
         # reload ytdl module as it may have been updated by cron
-        period = 15*60  #every 15 minutes
         if time.time() > flip + period:
             flip = time.time()
             youtube_dl = reload(youtube_dl)
