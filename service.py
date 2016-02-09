@@ -23,22 +23,23 @@ __addon__       = xbmcaddon.Addon()
 __addonname__   = __addon__.getAddonInfo('name')
 __icon__        = __addon__.getAddonInfo('icon')
 
+def format_log(message):
+    # Add addon name before notification
+    message = '[%s] %s' % (__addonname__, message)
+    # Remove or convert non ascii characters (xbmc.log doesn't support them)
+    message = unicodedata.normalize('NFKD', message)
+    message = message.encode('ascii', 'ignore')
+    return message
+
 class MyLogger(object):
-    def fmt(self, message):
-        message = '[%s] %s' % (__addonname__, message)
-        # Remove non ascii characters (xbmc.log doesn't support them)
-        message = unicodedata.normalize('NFKD', message)
-        message = message.encode('ascii', 'ignore')
-        return message
-    
     def debug(self, msg):
-        xbmc.log(self.fmt(msg), xbmc.LOGNOTICE)
+        xbmc.log(format_log(msg), xbmc.LOGNOTICE)
 
     def warning(self, msg):
-        xbmc.log(self.fmt(msg), xbmc.LOGNOTICE)
+        xbmc.log(format_log(msg), xbmc.LOGNOTICE)
 
     def error(self, msg):
-        xbmc.log(self.fmt(msg), xbmc.LOGERROR)
+        xbmc.log(format_log(msg), xbmc.LOGERROR)
 
 def log(message):
     """add message to kodi log"""
@@ -53,13 +54,14 @@ class extractor(threading.Thread):
         self.q = q
         self.t = time.time()
         self.monitor = xbmc.Monitor() # monitor xbmc status (exiting)
+        self.running = True
         threading.Thread.__init__(self)
 
     def run(self):
         is_playlist = False # are we dealing with a single media or a playlist page ?
         launched = False # is a media yet launched by this thread ?
         i = 1 # playlist item index
-        while not self.monitor.abortRequested() and i < 200:
+        while self.running and not self.monitor.abortRequested() and i < 200:
             ydl_opts = {
                 'ignoreerrors': True,
                 'logger': MyLogger(),
@@ -93,6 +95,10 @@ class extractor(threading.Thread):
         else:
             log('Extraction aborted before end')
 
+    def stop(self):
+        log('Stopping extraction')
+        self.running = False
+
 class handler(BaseHTTPRequestHandler):
     '''simple handler reacting to requests'''
     
@@ -114,7 +120,7 @@ class handler(BaseHTTPRequestHandler):
             </html>""")
             
             # send request to media info extractor
-            ext = extractor(url, QUEUE)
+            ext = extractor(url, MEDIAQUEUE)
             ext.start()
         else:
             self.send_error(404,'File Not Found: %s' % self.path)
@@ -145,20 +151,12 @@ def write_log(name, url):
             time = str(datetime.datetime.now())
             log.write(time+'\t'+name+'\t'+url+'\n')
 
-
-try:
-    # native youtube dl
-    import youtube_dl
-except ImportError:
-    log( "Missing youtube_dl in python path (sudo pip install youtube_dl)")
-else:
+def launch_service(media_queue):
     # monitor xbmc status (exiting)
     monitor = xbmc.Monitor()
     # the player and playlist to control
     web_player = xbmc.Player()
     video_playlist = xbmc.PlayList(xbmc.PLAYLIST_VIDEO)
-    # global queue for multithreading
-    QUEUE = Queue.Queue()
     # http server to watch for requests
     httpd = server()
     httpd.start()
@@ -168,8 +166,8 @@ else:
     last_request = 0
     while not monitor.abortRequested():
         # watch for requests and launch player
-        if not QUEUE.empty():
-            entry = QUEUE.get()
+        if not media_queue.empty():
+            entry = media_queue.get()
             mode, name, url, stream_url, t = entry
             #are we dealing with a single item ?
             if mode == 'play':
@@ -205,3 +203,14 @@ else:
         httpd.stop()
         log('Stopping service')
         
+
+if __name__ == '__main__':
+    try:
+        # native youtube dl
+        import youtube_dl
+    except ImportError:
+        log( "Missing youtube_dl in python path (sudo pip install youtube_dl)")
+    else:
+        # global queue for multithreading
+        MEDIAQUEUE = Queue.Queue()
+        launch_service(MEDIAQUEUE)
